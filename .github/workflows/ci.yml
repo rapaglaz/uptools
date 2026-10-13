@@ -31,13 +31,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   test:
-    name: Test (${{ matrix.os }})
+    name: Test (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - name: ubuntu-latest
+            os: ubuntu-latest
+          - name: macos-latest
+            os: macos-latest
+          # The lowest supported bash. docker run keeps JavaScript actions out of the Alpine
+          # based image.
+          - name: bash 4.4
+            os: ubuntu-latest
+            image: bash:4.4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,26 +58,23 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install bash
-      - run: bash --version
-      - run: bash tests/smoke.sh
-
-  # The lowest supported bash. docker run keeps JavaScript actions out of the Alpine based image.
-  test-bash44:
-    name: Test (bash 4.4)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: docker run --rm -v "$PWD":/w:ro -w /w bash:4.4 bash tests/smoke.sh
+      - name: Run the tests
+        if: ${{ !matrix.image }}
+        run: |
+          bash --version
+          bash tests/smoke.sh
+      - name: Run the tests in a container
+        if: ${{ matrix.image }}
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: docker run --rm -v "$PWD":/w:ro -w /w "$IMAGE" bash tests/smoke.sh
 
   # The single required status check. It reports for every PR (no path filters on the workflow)
   # and does not depend on job names, so jobs can be added or renamed without touching the ruleset.
   ci:
     name: CI
     if: always()
-    needs: [lint, test, test-bash44]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
