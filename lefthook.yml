@@ -8,6 +8,9 @@ pre-commit:
     shellcheck:
       glob: "{uptools,*.sh}"
       run: mise exec -- shellcheck {staged_files}
+    actionlint:
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: mise exec -- actionlint {staged_files}
 
 commit-msg:
   commands:
