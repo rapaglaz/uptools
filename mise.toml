@@ -1,0 +1,31 @@
+[tools]
+shellcheck = "0.11.0"
+shfmt = "3.14.1"
+lefthook = "2.2.1"
+
+[vars]
+sh_files = "uptools core.sh install.sh modules/*.sh tests/*.sh"
+
+[tasks.setup]
+description = "Install the git hooks"
+run = "lefthook install"
+
+[tasks.lint]
+description = "Lint the shell scripts with shellcheck"
+run = "shellcheck {{vars.sh_files}}"
+
+[tasks.fmt]
+description = "Format the shell scripts with shfmt"
+run = "shfmt -w {{vars.sh_files}}"
+
+[tasks.fmt-check]
+description = "Check the shell formatting without changing files"
+run = "shfmt -d {{vars.sh_files}}"
+
+[tasks.test]
+description = "Run the smoke tests"
+run = "bash tests/smoke.sh"
+
+[tasks.test-bash44]
+description = "Run the smoke tests under bash 4.4 (needs Docker)"
+run = 'docker run --rm -v "$PWD":/w -w /w bash:4.4 bash tests/smoke.sh'
