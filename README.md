@@ -112,6 +112,7 @@ every tool in it is commented out, so a fresh install runs nothing until you unc
 | Tool | Aliases | Description |
 | --- | --- | --- |
 | `homebrew` | `brew` | Homebrew formulae and casks |
+| `apt` | | APT packages (Debian/Ubuntu); `update` uses `sudo` unless run as root |
 | `ghcup` | | ghcup itself, plus a list of available updates for the tools it installed (GHC, cabal, HLS, stack, ...) |
 | `haskell-tools` | | cabal-installed Haskell tools listed in the `haskell-tools` file |
 | `mise` | | mise tool versions |

@@ -6,6 +6,7 @@
 # Nothing is enabled by default: uncomment the tools you want.
 
 # android
+# apt
 # container
 # flutter
 # ghcup
