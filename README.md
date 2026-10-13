@@ -232,4 +232,5 @@ config.example   # template for the default tool list
 install.sh       # symlinks the script and creates config
 tests/smoke.sh   # smoke tests against a sandboxed copy with a fake module
 mise.toml        # pinned dev tools and tasks; lefthook.yml holds the git hooks
+renovate.json    # dependency updates (mise tools, GitHub Actions)
 ```
