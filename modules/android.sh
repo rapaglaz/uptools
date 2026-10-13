@@ -84,7 +84,7 @@ android_update() {
   else
     run_with_check "ANDROID" android sdk list || return 1
     echo
-    echo -e "${BOLD_MAGENTA}New SDK packages available (install with -u):${RESET}"
+    echo -e "${BOLD_MAGENTA}New SDK packages available (install with: uptools update android):${RESET}"
     printf '  %s\n' "${new_packages[@]}"
   fi
 }
