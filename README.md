@@ -205,15 +205,16 @@ register_tool "foo" "foo_update" "update Foo"
 Tool versions are pinned in `mise.toml`.
 
 ```bash
-mise install            # shellcheck, shfmt, lefthook
+mise install            # shellcheck, shfmt, lefthook, actionlint, zizmor
 mise run setup          # install the git hooks
 mise run lint           # shellcheck
+mise run lint-actions   # actionlint and zizmor for .github/workflows
 mise run fmt            # shfmt (fmt-check only reports)
 mise run test           # smoke tests (tests/smoke.sh)
 mise run test-bash44    # the same under bash 4.4, needs Docker
 ```
 
-The pre-commit hook runs shfmt and shellcheck on the staged shell files; the commit-msg hook
+The pre-commit hook runs shfmt and shellcheck on the staged shell files and actionlint on workflows; the commit-msg hook
 requires Conventional Commits (`feat`, `fix`, `chore`, `refactor`, `test`, `docs`, ...).
 
 ## License
