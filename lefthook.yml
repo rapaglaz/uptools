@@ -1,0 +1,25 @@
+pre-commit:
+  parallel: true
+  commands:
+    shfmt:
+      glob: "{uptools,*.sh}"
+      run: mise exec -- shfmt -d {staged_files}
+      fail_text: Run `mise run fmt` and stage the result
+    shellcheck:
+      glob: "{uptools,*.sh}"
+      run: mise exec -- shellcheck {staged_files}
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: |
+        subject=$(head -n 1 {1})
+        case "$subject" in
+          Merge\ * | Revert\ * | fixup!\ * | squash!\ *) exit 0 ;;
+        esac
+        pattern='^(feat|fix|chore|refactor|test|docs|style|ci|build|perf)(\([a-z0-9._-]+\))?!?: .+'
+        if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+          echo "Commit subject must follow Conventional Commits, e.g. 'feat(show): list tool state'." >&2
+          echo "Types: feat, fix, chore, refactor, test, docs, style, ci, build, perf." >&2
+          exit 1
+        fi

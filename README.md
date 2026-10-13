@@ -200,6 +200,22 @@ register_tool "foo" "foo_update" "update Foo"
 - Optionally define `foo_installed` (return 0 when installed) if the check is not simply
   `command -v foo`.
 
+## Development
+
+Tool versions are pinned in `mise.toml`.
+
+```bash
+mise install            # shellcheck, shfmt, lefthook
+mise run setup          # install the git hooks
+mise run lint           # shellcheck
+mise run fmt            # shfmt (fmt-check only reports)
+mise run test           # smoke tests (tests/smoke.sh)
+mise run test-bash44    # the same under bash 4.4, needs Docker
+```
+
+The pre-commit hook runs shfmt and shellcheck on the staged shell files; the commit-msg hook
+requires Conventional Commits (`feat`, `fix`, `chore`, `refactor`, `test`, `docs`, ...).
+
 ## License
 
 [MIT](LICENSE)
@@ -213,4 +229,6 @@ modules/*.sh     # one file per tool, self-registering
 config.example   # template for the default tool list
 *.example        # templates for the git-ignored haskell-tools and rust-tools lists
 install.sh       # symlinks the script and creates config
+tests/smoke.sh   # smoke tests against a sandboxed copy with a fake module
+mise.toml        # pinned dev tools and tasks; lefthook.yml holds the git hooks
 ```
