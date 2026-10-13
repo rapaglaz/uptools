@@ -210,7 +210,7 @@ mise run setup          # install the git hooks
 mise run lint           # shellcheck
 mise run lint-actions   # actionlint and zizmor for .github/workflows
 mise run fmt            # shfmt (fmt-check only reports)
-mise run test           # smoke tests (tests/smoke.sh)
+mise run test           # all tests (tests/run.sh: smoke.sh and modules.sh)
 mise run test-bash44    # the same under bash 4.4, needs Docker
 ```
 
@@ -230,7 +230,7 @@ modules/*.sh     # one file per tool, self-registering
 config.example   # template for the default tool list
 *.example        # templates for the git-ignored haskell-tools and rust-tools lists
 install.sh       # symlinks the script and creates config
-tests/smoke.sh   # smoke tests against a sandboxed copy with a fake module
+tests/            # smoke tests (CLI, with a fake module) and module logic tests
 mise.toml        # pinned dev tools and tasks; lefthook.yml holds the git hooks
 renovate.json    # dependency updates (mise tools, GitHub Actions)
 ```

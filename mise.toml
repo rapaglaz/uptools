@@ -29,9 +29,9 @@ description = "Check the shell formatting without changing files"
 run = "shfmt -d {{vars.sh_files}}"
 
 [tasks.test]
-description = "Run the smoke tests"
-run = "bash tests/smoke.sh"
+description = "Run all tests (smoke tests and module logic tests)"
+run = "bash tests/run.sh"
 
 [tasks.test-bash44]
-description = "Run the smoke tests under bash 4.4 (needs Docker)"
-run = 'docker run --rm -v "$PWD":/w -w /w bash:4.4 bash tests/smoke.sh'
+description = "Run all tests under bash 4.4 (needs Docker)"
+run = 'docker run --rm -v "$PWD":/w -w /w bash:4.4 bash tests/run.sh'

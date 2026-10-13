@@ -62,12 +62,12 @@ jobs:
         if: ${{ !matrix.image }}
         run: |
           bash --version
-          bash tests/smoke.sh
+          bash tests/run.sh
       - name: Run the tests in a container
         if: ${{ matrix.image }}
         env:
           IMAGE: ${{ matrix.image }}
-        run: docker run --rm -v "$PWD":/w:ro -w /w "$IMAGE" bash tests/smoke.sh
+        run: docker run --rm -v "$PWD":/w:ro -w /w "$IMAGE" bash tests/run.sh
 
   # The single required status check. It reports for every PR (no path filters on the workflow)
   # and does not depend on job names, so jobs can be added or renamed without touching the ruleset.
