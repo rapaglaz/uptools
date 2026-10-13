@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md", LICENSE]
+  pull_request:
+    paths-ignore: ["**/*.md", LICENSE]
+
+# A newer push to the same ref makes the older run pointless
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - run: mise run lint
+      - run: mise run fmt-check
+      # the token lets zizmor run its online audits (impostor commits, known vulnerable actions)
+      - run: mise run lint-actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # macOS ships bash 3.2; uptools needs >= 4.4
+      - name: Install a current bash
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: brew install bash
+      - run: bash --version
+      - run: bash tests/smoke.sh
+
+  # Run in containers: the oldest supported bash and the newest Ubuntu LTS (newer bash,
+  # uutils coreutils). docker run keeps JavaScript actions out of the Alpine based image.
+  test-container:
+    name: Test (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["bash:4.4", "ubuntu:26.04"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          IMAGE: ${{ matrix.image }}
+        run: docker run --rm -v "$PWD":/w:ro -w /w "$IMAGE" bash tests/smoke.sh
