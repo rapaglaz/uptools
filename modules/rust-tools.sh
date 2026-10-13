@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-RUST_TOOLS_CONFIG="${UPTOOLS_HOME:-${SCRIPT_DIR:-$HOME/.uptools}}/rust-tools"
+RUST_TOOLS_CONFIG="${UPTOOLS_CONFIG_DIR}/rust-tools"
 
 # Crate names to track, one per line (# for comments)
 _rust_tools_load() {

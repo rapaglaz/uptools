@@ -37,8 +37,9 @@ git clone <repository URL> ~/.uptools
 ```
 
 `install.sh` links `~/.local/bin/uptools` to the script (make sure `~/.local/bin` is in your
-`PATH`) and creates `config` from `config.example`. The repository can live anywhere; `uptools`
-resolves its own location, including through symlinks.
+`PATH`) and creates `~/.config/uptools/config` from `examples/config.example`. Files from an older
+install (`config`, `haskell-tools`, `rust-tools` next to the script) are moved there. The repository
+can live anywhere; `uptools` resolves its own location, including through symlinks.
 
 `install.sh --dry-run` shows what it would link and create without changing anything.
 
@@ -90,8 +91,9 @@ defines `<handler prefix>_installed` (for example `homebrew_installed` looks for
 
 ## Configuration
 
-`config` (next to the script) lists the tools that `uptools` and `uptools update` run, one per
-line; lines starting with `#` are comments. It is an **allow list**: a tool that is not listed is
+`config` lives in `${XDG_CONFIG_HOME:-~/.config}/uptools/` (or in `$UPTOOLS_HOME` when set) and
+lists the tools that `uptools` and `uptools update` run, one per line; lines starting with `#` are
+comments. It is an **allow list**: a tool that is not listed is
 not run, so a newly added module never runs by accident. Use `target` or `update <names>` for
 anything else. Without a `config` file `uptools` prints a hint and runs nothing.
 
@@ -101,8 +103,9 @@ mise
 # rustup   <- known, but not run by default
 ```
 
-`config` is git-ignored; `config.example` is the template that `install.sh` copies. Every tool in
-the template is commented out, so a fresh install runs nothing until you uncomment what you want.
+The config directory is outside the repository, so personal state is never committed and updating
+the checkout never touches it. `examples/config.example` is the template that `install.sh` copies;
+every tool in it is commented out, so a fresh install runs nothing until you uncomment what you want.
 
 ## Available tools
 
@@ -120,8 +123,8 @@ the template is commented out, so a fresh install runs nothing until you uncomme
 | `android` | | Android CLI and SDK packages |
 
 The cabal tools that `haskell-tools` tracks are listed in the `haskell-tools` file and the cargo
-crates that `rust-tools` tracks in the `rust-tools` file (one name per line, both git-ignored; see
-`haskell-tools.example` and `rust-tools.example`). `rust-tools` compares the installed versions
+crates that `rust-tools` tracks in the `rust-tools` file (one name per line, both in the config directory; see
+`examples/haskell-tools.example` and `examples/rust-tools.example`). `rust-tools` compares the installed versions
 (`cargo install --list`) with the crates.io index and, in update mode, runs
 `cargo install <crate> --locked`.
 

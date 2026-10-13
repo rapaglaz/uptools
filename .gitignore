@@ -1,5 +1,2 @@
 # Local state and personal configuration
 .claude/
-config
-haskell-tools
-rust-tools

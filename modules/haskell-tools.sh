@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-HASKELL_TOOLS_CONFIG="${UPTOOLS_HOME:-${SCRIPT_DIR:-$HOME/.uptools}}/haskell-tools"
+HASKELL_TOOLS_CONFIG="${UPTOOLS_CONFIG_DIR}/haskell-tools"
 
 _haskell_tools_load() {
   local line tools=()

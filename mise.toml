@@ -14,7 +14,7 @@ run = "lefthook install"
 
 [tasks.lint]
 description = "Lint the shell scripts with shellcheck"
-run = "shellcheck {{vars.sh_files}}"
+run = "shellcheck -x {{vars.sh_files}}"
 
 [tasks.lint-actions]
 description = "Lint the GitHub Actions workflows (actionlint, zizmor)"

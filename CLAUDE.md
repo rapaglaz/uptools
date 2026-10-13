@@ -6,14 +6,13 @@
 uptools          # main script: registry, arg parsing, dedup, dispatch
 core.sh          # shared utilities: colors, handle_error, command_exists, run_with_check, print_section
 modules/*.sh     # one file per tool; self-register via register_tool
-config.example   # template for the git-ignored `config` (install.sh copies it)
-haskell-tools.example  # templates for the git-ignored `haskell-tools` / `rust-tools` lists
-rust-tools.example
+examples/        # templates for `config`, `haskell-tools`, `rust-tools` (install.sh copies config)
 install.sh       # symlinks ~/.local/bin/uptools, creates `config`, prints a usage overview (--dry-run)
 ```
 
-The repository is public: never commit personal state. `config`, `haskell-tools`, `rust-tools` and `.claude/` are
-git-ignored; keep examples in `*.example`.
+The repository is public: never commit personal state. `config`, `haskell-tools` and `rust-tools` live in
+`${UPTOOLS_HOME:-${XDG_CONFIG_HOME:-~/.config}/uptools}` (`UPTOOLS_CONFIG_DIR` in the code), outside the
+checkout; `.claude/` is git-ignored. Keep templates in `examples/*.example`. Tests set `UPTOOLS_HOME` to a sandbox.
 
 Requires bash >= 4.4 (associative arrays, `local -n`, `${var@Q}`); `uptools` exits early with a
 message on older versions (macOS ships 3.2). It first re-execs a Homebrew bash
