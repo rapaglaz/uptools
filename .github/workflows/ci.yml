@@ -54,7 +54,7 @@ jobs:
       - run: bash --version
       - run: bash tests/smoke.sh
 
-  # Run in containers: the oldest supported bash and the newest Ubuntu LTS (newer bash,
+  # Run in containers: the oldest supported bash and the newest Ubuntu LTS (the ubuntu:latest tag; newer bash,
   # uutils coreutils). docker run keeps JavaScript actions out of the Alpine based image.
   test-container:
     name: Test (${{ matrix.image }})
@@ -63,7 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ["bash:4.4", "ubuntu:26.04"]
+        image: ["bash:4.4", "ubuntu:latest"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
