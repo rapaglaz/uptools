@@ -40,6 +40,7 @@ declare -A TOOL_FUNC TOOL_ALIASES TOOL_DESC TOOL_ALIAS_DESC
 
 # CLI keywords; a module may not register a tool or alias with one of these names
 KEYWORDS=(update target skip show completion)
+# shellcheck disable=SC2329 # called from register_tool, which modules call
 is_reserved_name() {
   local k
   for k in "${KEYWORDS[@]}"; do [[ "$1" == "$k" ]] && return 0; done
@@ -48,6 +49,7 @@ is_reserved_name() {
 
 # register_tool <name> <function> <description> [alias...]
 # aliases may include a description: "alias:description"
+# shellcheck disable=SC2329 # called by the modules sourced below
 register_tool() {
   local name="$1" func="$2" desc="$3"
   shift 3
@@ -674,4 +676,4 @@ for tool in "${TOOLS_TO_RUN[@]}"; do
   run_tool "$tool"
 done
 
-exit $SCRIPT_EXIT_CODE
+exit "$SCRIPT_EXIT_CODE"

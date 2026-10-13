@@ -15,6 +15,7 @@ if [[ -z "${NO_COLOR:-}" ]]; then
   BOLD_MAGENTA="\033[1;35m"
   RESET="\033[0m"
 else
+  # shellcheck disable=SC2034 # GREEN is used by the modules
   BOLD_WHITE="" RED="" YELLOW="" GREEN="" BOLD_MAGENTA="" RESET=""
 fi
 
