@@ -15,10 +15,15 @@ _haskell_tools_load() {
 _haskell_tools_check() {
   local tool="$1" tmpdir="$2"
   local installed latest
-  installed=$("$tool" --version 2>&1 | grep -o '[0-9][0-9.]*' | head -1)
-  if [[ -z "$installed" ]]; then
+  # Check PATH first: the "command not found" message of bash contains digits (the line number)
+  if ! command -v "$tool" >/dev/null 2>&1; then
     echo -e "${RED}✗ $tool — not found in PATH${RESET}"
     touch "$tmpdir/$tool.missing"
+    return
+  fi
+  installed=$("$tool" --version 2>&1 | grep -o '[0-9][0-9.]*' | head -1)
+  if [[ -z "$installed" ]]; then
+    echo "$tool (could not read the installed version)"
     return
   fi
   latest=$(curl -s --max-time 30 "https://hackage.haskell.org/package/$tool/preferred.json" 2>/dev/null |
