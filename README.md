@@ -26,7 +26,8 @@ uptools show               # list known tools: in config? installed?
 - **macOS** is the platform it is developed and tested on (Apple Silicon). Some modules are
   macOS specific (`container`); the others should work anywhere their tool does, but that is not
   tested.
-- `jq` for the `homebrew` and `container` modules, `curl` for `haskell-tools` and `rust-tools`.
+- `jq` for the `homebrew` and `container` modules, `curl` for `haskell-tools` and `rust-tools`,
+  `sudo` for `apt` in update mode (not needed as root).
 - Each module needs only its own tool; a missing tool is skipped with a `[ SKIP ]` notice.
 
 ## Installation
@@ -122,6 +123,13 @@ every tool in it is commented out, so a fresh install runs nothing until you unc
 | `sdkman` | | SDKMAN! and its SDKs |
 | `container` | | Apple `container` tool |
 | `android` | | Android CLI and SDK packages |
+
+`apt` only lists packages in check mode (`apt list --upgradable`). It does not refresh the package
+index, because that needs root, so the list reflects the last `apt update`. In update mode it runs
+`apt update` and `apt upgrade -y`, through `sudo` unless `uptools` already runs as root. It never
+uses `full-upgrade` (which may remove packages); packages that `upgrade` keeps back are reported so
+you can run `sudo apt full-upgrade` yourself. `sudo` asks for the password in the terminal, so run
+`sudo -v` first or add a narrow `NOPASSWD` rule for those two commands when running unattended.
 
 The cabal tools that `haskell-tools` tracks are listed in the `haskell-tools` file and the cargo
 crates that `rust-tools` tracks in the `rust-tools` file (one name per line, both in the config directory; see
