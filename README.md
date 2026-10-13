@@ -220,17 +220,3 @@ requires Conventional Commits (`feat`, `fix`, `chore`, `refactor`, `test`, `docs
 ## License
 
 [MIT](LICENSE)
-
-## Project layout
-
-```text
-uptools          # main script: registry, argument parsing, dispatch, completion generators
-core.sh          # shared helpers: colors, error handling, command checks
-modules/*.sh     # one file per tool, self-registering
-config.example   # template for the default tool list
-*.example        # templates for the git-ignored haskell-tools and rust-tools lists
-install.sh       # symlinks the script and creates config
-tests/smoke.sh   # smoke tests against a sandboxed copy with a fake module
-mise.toml        # pinned dev tools and tasks; lefthook.yml holds the git hooks
-renovate.json    # dependency updates (mise tools, GitHub Actions)
-```
