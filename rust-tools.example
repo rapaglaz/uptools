@@ -1,0 +1,5 @@
+# Crates installed with `cargo install`, one per line (# for comments).
+# uptools compares them with crates.io and reinstalls outdated ones in update mode.
+cargo-edit
+cargo-watch
+cargo-nextest

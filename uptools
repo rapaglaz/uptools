@@ -1,0 +1,677 @@
+#!/usr/bin/env bash
+
+# Requires bash >= 4.4 (associative arrays, namerefs, ${var@Q}); macOS ships 3.2.
+# Login shells, cron and launchd often lack Homebrew in PATH, so "env bash" finds the old
+# system bash. Re-run under a Homebrew bash when one exists (this block must stay bash 3.2 safe).
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+  for _newer_bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [[ -x "$_newer_bash" ]] &&
+      "$_newer_bash" -c '((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4)))' 2>/dev/null; then
+      exec "$_newer_bash" "$0" "$@"
+    fi
+  done
+  echo >&2 "uptools requires bash >= 4.4 (found ${BASH_VERSION}). On macOS: brew install bash"
+  exit 1
+fi
+
+# Exit on unbound variables and pipe failures; allow individual commands to fail
+set -uo pipefail
+
+# Tracks whether any tool failed; used for the final exit code
+SCRIPT_EXIT_CODE=0
+
+# --- Tool registry ---
+# Modules live in the modules/ subdirectory next to this script.
+# Each module defines an *_update() function and calls register_tool to self-register.
+# Adding a new tool: drop a new .sh file in modules/ — no changes to this script needed.
+
+# Resolve symlinks so SCRIPT_DIR always points to the real script location
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do _src="$(readlink "$_src")"; done
+SCRIPT_DIR="$(cd "$(dirname "$_src")" && pwd)"
+unset _src
+MODULES_DIR="${SCRIPT_DIR}/modules"
+
+# shellcheck source=core.sh
+source "${SCRIPT_DIR}/core.sh"
+
+ALL_TOOLS=()
+declare -A TOOL_FUNC TOOL_ALIASES TOOL_DESC TOOL_ALIAS_DESC
+
+# CLI keywords; a module may not register a tool or alias with one of these names
+KEYWORDS=(update target skip show completion)
+is_reserved_name() {
+  local k
+  for k in "${KEYWORDS[@]}"; do [[ "$1" == "$k" ]] && return 0; done
+  return 1
+}
+
+# register_tool <name> <function> <description> [alias...]
+# aliases may include a description: "alias:description"
+register_tool() {
+  local name="$1" func="$2" desc="$3"
+  shift 3
+  if is_reserved_name "$name"; then
+    echo >&2 "register_tool: '$name' is a reserved name"
+    return 1
+  fi
+  ALL_TOOLS+=("$name")
+  TOOL_FUNC["$name"]="$func"
+  TOOL_DESC["$name"]="$desc"
+  local alias_name alias_desc
+  for alias_spec in "$@"; do
+    if [[ "$alias_spec" == *:* ]]; then
+      alias_name="${alias_spec%%:*}"
+      alias_desc="${alias_spec#*:}"
+    else
+      alias_name="$alias_spec"
+      alias_desc="${desc} (alias for ${name})"
+    fi
+    if is_reserved_name "$alias_name"; then
+      echo >&2 "register_tool: '$alias_name' is a reserved name"
+      return 1
+    fi
+    TOOL_ALIASES["$alias_name"]="$name"
+    TOOL_ALIAS_DESC["$alias_name"]="$alias_desc"
+  done
+}
+
+# Source all tool modules
+if [[ -d "$MODULES_DIR" ]]; then
+  for _mod in "$MODULES_DIR"/*.sh; do
+    [[ -f "$_mod" ]] || continue
+    # shellcheck source=/dev/null
+    source "$_mod"
+  done
+fi
+
+# Argument parsing
+AUTO_UPDATE=false
+TOOLS_TO_RUN=()
+SKIP_TOOLS=()
+SHOW_REQUESTED=false
+EXPLICIT_TOOLS=false # true when names were given via target / update <names>
+CONFIG_FILE="${SCRIPT_DIR}/config"
+
+# Load the tools to run by default from the config file (one per line, # for comments).
+# The config is an allow list: tools that are not listed are not run.
+load_config() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo >&2 -e "${YELLOW}[ WARN ]${RESET} No config file at '$CONFIG_FILE'"
+    echo >&2 "List the tools to run there (one per line) or use: uptools target <names>"
+    return 0
+  fi
+  local line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Strip whitespace and skip empty lines / comments
+    line="${line//[[:space:]]/}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    validate_tool "$line" || continue
+    TOOLS_TO_RUN+=("$line")
+  done <"$CONFIG_FILE"
+  if [[ ${#TOOLS_TO_RUN[@]} -eq 0 ]]; then
+    echo >&2 -e "${YELLOW}[ WARN ]${RESET} config file '$CONFIG_FILE' has no enabled tools"
+  fi
+}
+
+# Validate a tool name; prints a warning and returns 1 if unknown
+validate_tool() {
+  local name="${1// /}"
+  local canonical="${TOOL_ALIASES[$name]:-$name}"
+  if [[ -z "${TOOL_FUNC[$canonical]+set}" ]]; then
+    echo >&2 -e "${YELLOW}[ WARN ]${RESET} Unknown tool: '$1' — skipping"
+    echo >&2 "Available tools: ${ALL_TOOLS[*]}"
+    SCRIPT_EXIT_CODE=1
+    return 1
+  fi
+}
+
+# Print canonical names listed in the config file (one per line, unknown names ignored)
+config_canonical_names() {
+  [[ -f "$CONFIG_FILE" ]] || return 0
+  local line canonical
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//[[:space:]]/}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    canonical="${TOOL_ALIASES[$line]:-$line}"
+    [[ -n "${TOOL_FUNC[$canonical]+set}" ]] && printf '%s\n' "$canonical"
+  done <"$CONFIG_FILE"
+  return 0
+}
+
+# True when the tool is installed. A module may define <prefix>_installed (prefix is its
+# handler name without _update); otherwise the tool name is looked up in $PATH.
+tool_installed() {
+  local canonical="${TOOL_ALIASES[$1]:-$1}"
+  local checker="${TOOL_FUNC[$canonical]%_update}_installed"
+  if declare -F "$checker" >/dev/null; then
+    "$checker"
+  else
+    command -v "$canonical" >/dev/null 2>&1
+  fi
+}
+
+# Append a comma/space separated list of names to the named array
+# usage: add_names <array-name> <text>
+add_names() {
+  local -n _names_target="$1"
+  local _word
+  IFS=', ' read -ra _words <<<"$2"
+  for _word in "${_words[@]}"; do
+    [[ -n "${_word// /}" ]] && _names_target+=("$_word")
+  done
+}
+
+# Silently remove tools in SKIP_TOOLS from TOOLS_TO_RUN
+apply_skip() {
+  [[ ${#SKIP_TOOLS[@]} -eq 0 ]] && return 0
+  local -A _skip=()
+  local canonical
+  for s in "${SKIP_TOOLS[@]}"; do
+    canonical="${TOOL_ALIASES[$s]:-$s}"
+    _skip["$canonical"]=1
+  done
+  local _filtered=()
+  for tool in "${TOOLS_TO_RUN[@]}"; do
+    canonical="${TOOL_ALIASES[$tool]:-$tool}"
+    [[ -z "${_skip[$canonical]+set}" ]] && _filtered+=("$tool")
+  done
+  TOOLS_TO_RUN=("${_filtered[@]}")
+}
+
+run_tool() {
+  local name="${1// /}"
+  local canonical="${TOOL_ALIASES[$name]:-$name}"
+  local func="${TOOL_FUNC[$canonical]:-}"
+  local mode="check"
+  [[ "$AUTO_UPDATE" == true ]] && mode="update"
+  [[ -n "$func" ]] && "$func" "$mode" "$name"
+}
+
+# List every known tool with its config / installed state
+print_show() {
+  local -A in_config=()
+  local name configured installed
+  while IFS= read -r name; do in_config["$name"]=1; done < <(config_canonical_names)
+  print_section "Tools"
+  printf '  %-16s%-8s%-11s%s\n' NAME CONFIG INSTALLED DESCRIPTION
+  for name in "${ALL_TOOLS[@]}"; do
+    configured=no
+    [[ -n "${in_config[$name]+set}" ]] && configured=yes
+    installed=no
+    tool_installed "$name" && installed=yes
+    printf '  %-16s%-8s%-11s%s\n' "$name" "$configured" "$installed" "${TOOL_DESC[$name]}"
+  done
+}
+
+# Print "name<TAB>description" for every tool and alias.
+# Used at completion time so the generated scripts never need a regeneration.
+print_complete_tools() {
+  local name alias_name
+  for name in "${ALL_TOOLS[@]}"; do
+    printf '%s\t%s\n' "$name" "${TOOL_DESC[$name]}"
+  done
+  for alias_name in "${!TOOL_ALIASES[@]}"; do
+    printf '%s\t%s\n' "$alias_name" "${TOOL_ALIAS_DESC[$alias_name]}"
+  done
+}
+
+print_completion_zsh() {
+  cat <<'ENDOFZSH'
+#compdef uptools
+
+_uptools_tools_list() {
+  local -a tools
+  local line
+  for line in "${(@f)$(uptools --complete-tools 2>/dev/null)}"; do
+    [[ -n "$line" ]] && tools+=("${line%%$'\t'*}:${line#*$'\t'}")
+  done
+  _describe -t tools 'tool' tools
+}
+
+_uptools_tools() {
+  _sequence -s , _uptools_tools_list
+}
+
+_uptools_cmd() {
+  if [[ "${words[CURRENT-1]}" == completion ]]; then
+    compadd zsh fish bash
+    return
+  fi
+
+  # Active keyword and the number of words given after it
+  local ctx=none n=0 w i
+  for (( i = 2; i < CURRENT; i++ )); do
+    w="${words[i]}"
+    case "$w" in
+      update|target|skip|show|completion) ctx="$w"; n=0 ;;
+      -*) ;;
+      *) (( n++ )) ;;
+    esac
+  done
+
+  # Keywords that are not on the command line yet
+  local -a keywords
+  (( ${words[(I)update]} && ${words[(I)update]} < CURRENT )) || keywords+=('update:install available updates')
+  (( ${words[(I)target]} && ${words[(I)target]} < CURRENT )) || keywords+=('target:run specific tools')
+  (( ${words[(I)skip]} && ${words[(I)skip]} < CURRENT )) || keywords+=('skip:exclude tools for this run')
+  (( ${words[(I)show]} && ${words[(I)show]} < CURRENT )) || keywords+=('show:list known tools')
+  (( ${words[(I)completion]} && ${words[(I)completion]} < CURRENT )) || keywords+=('completion:print shell completion script')
+  keywords+=('--help:show help and exit')
+
+  case "$ctx" in
+    update|target|skip)
+      _uptools_tools
+      (( n > 0 )) && _describe -t keywords 'keyword' keywords
+      ;;
+    show|completion)
+      ;;
+    *)
+      _describe -t keywords 'keyword' keywords
+      ;;
+  esac
+}
+
+_uptools_cmd "$@"
+ENDOFZSH
+}
+
+print_completion_bash() {
+  cat <<'ENDOFBASH'
+# Bash completion for uptools. Load it with: source <(uptools completion bash)
+# (the bash-completion package is not required, but without it nothing auto-loads this file)
+
+_uptools_complete() {
+  local cur="${COMP_WORDS[COMP_CWORD]}" prev="${COMP_WORDS[COMP_CWORD-1]}"
+  COMPREPLY=()
+
+  if [[ "$prev" == completion ]]; then
+    COMPREPLY=($(compgen -W "zsh fish bash" -- "$cur"))
+    return
+  fi
+
+  # Active keyword, the number of words given after it, and the names already used
+  local ctx=none n=0 i w part used=" " kw_used=" "
+  local -a parts
+  for ((i = 1; i < COMP_CWORD; i++)); do
+    w="${COMP_WORDS[i]}"
+    case "$w" in
+    update | target | skip | show | completion)
+      ctx="$w"
+      n=0
+      kw_used+="$w "
+      ;;
+    -*) ;;
+    *)
+      ((n++))
+      read -ra parts <<<"${w//,/ }"
+      for part in "${parts[@]}"; do used+="$part "; done
+      ;;
+    esac
+  done
+
+  # Keywords that are not on the command line yet
+  local keywords="--help" k
+  for k in update target skip show completion; do
+    [[ "$kw_used" == *" $k "* ]] || keywords+=" $k"
+  done
+
+  case "$ctx" in
+  update | target | skip)
+    # Tool names; comma separated lists keep the part typed so far
+    local cur_word="${cur##*,}" prefix="" name
+    if [[ "$cur" == *,* ]]; then
+      prefix="${cur%,*},"
+      read -ra parts <<<"${prefix//,/ }"
+      for part in "${parts[@]}"; do used+="$part "; done
+    fi
+    while IFS=$'\t' read -r name _; do
+      [[ "$used" == *" $name "* ]] && continue
+      [[ "$name" == "$cur_word"* ]] && COMPREPLY+=("${prefix}${name}")
+    done < <(uptools --complete-tools 2>/dev/null)
+    if ((n > 0)) && [[ -z "$prefix" ]]; then
+      COMPREPLY+=($(compgen -W "$keywords" -- "$cur"))
+    fi
+    ;;
+  show | completion) ;;
+  *)
+    COMPREPLY=($(compgen -W "$keywords" -- "$cur"))
+    ;;
+  esac
+}
+
+complete -F _uptools_complete uptools
+ENDOFBASH
+}
+
+print_completion_fish() {
+  cat <<'ENDOFFISH'
+# Fish shell completion for uptools
+
+# Prints the active keyword and the number of words given after it
+function __uptools_ctx
+    set -l kw none
+    set -l n 0
+    for tok in (commandline -opc)[2..-1]
+        switch $tok
+            case update target skip show completion
+                set kw $tok
+                set n 0
+            case '-*'
+            case '*'
+                set n (math $n + 1)
+        end
+    end
+    echo $kw $n
+end
+
+# What can be completed at the cursor: keywords | tools | shells
+function __uptools_want
+    set -l ctx (string split ' ' (__uptools_ctx))
+    switch $argv[1]
+        case shells
+            test $ctx[1] = completion -a $ctx[2] -eq 0
+        case tools
+            contains -- $ctx[1] update target skip
+        case keywords
+            switch $ctx[1]
+                case none
+                    return 0
+                case show completion
+                    return 1
+                case '*'
+                    test $ctx[2] -gt 0
+            end
+    end
+end
+
+# Keywords that are not on the command line yet
+function __uptools_keywords
+    set -l used (commandline -opc)[2..-1]
+    contains -- update $used; or printf 'update\tInstall available updates\n'
+    contains -- target $used; or printf 'target\tRun specific tools\n'
+    contains -- skip $used; or printf 'skip\tExclude tools for this run\n'
+    contains -- show $used; or printf 'show\tList known tools\n'
+    contains -- completion $used; or printf 'completion\tPrint shell completion script\n'
+    printf '%s\t%s\n' --help 'Show help and exit'
+end
+
+# Tool names; comma separated lists supported
+function __uptools_tools
+    set -l cur (commandline -ct)
+    set -l prefix ''
+    string match -q -- '*,*' $cur
+    and set prefix (string replace -r -- '[^,]*$' '' $cur)
+    set -l used (string split , -- $cur)
+    for tok in (commandline -opc)[2..-1]
+        string match -q -- '-*' $tok
+        or contains -- $tok update target skip show completion
+        or set used $used (string split , -- $tok)
+    end
+    for line in (uptools --complete-tools 2>/dev/null)
+        set -l parts (string split \t -- $line)
+        contains -- $parts[1] $used
+        and continue
+        printf '%s%s\t%s\n' $prefix $parts[1] $parts[2]
+    end
+end
+
+# No file completion anywhere
+complete -c uptools -f
+
+complete -c uptools -n '__uptools_want keywords' -a '(__uptools_keywords)'
+complete -c uptools -n '__uptools_want tools' -a '(__uptools_tools)'
+complete -c uptools -n '__uptools_want shells' -a 'zsh fish bash' -d Shell
+ENDOFFISH
+}
+
+print_completion() {
+  local shell="${1:-}"
+  case "$shell" in
+  zsh) print_completion_zsh ;;
+  bash) print_completion_bash ;;
+  fish) print_completion_fish ;;
+  *)
+    echo >&2 "Usage: uptools completion zsh|fish|bash (got: '${shell}')"
+    exit 2
+    ;;
+  esac
+}
+
+# Colors for --help: a muted dark palette, plain when piped or when NO_COLOR is set.
+# 24-bit color when the terminal advertises it, the 16 ANSI colors otherwise.
+help_colors() {
+  H_KW="" H_CMD="" H_OPT="" H_PARAM="" H_PATH="" H_NOTE="" H_LABEL="" H_RESET=""
+  [[ -t 1 && -z "${NO_COLOR:-}" ]] || return 0
+  H_RESET=$'\033[0m'
+  case "${COLORTERM:-}" in
+  truecolor | 24bit)
+    H_KW=$'\033[1;38;2;115;150;196m'    # keywords and headings
+    H_CMD=$'\033[38;2;166;210;212m'     # the uptools command
+    H_OPT=$'\033[3;38;2;140;155;173m'   # options
+    H_PARAM=$'\033[38;2;166;189;164m'   # arguments and tool names
+    H_PATH=$'\033[38;2;160;186;203m'    # paths
+    H_NOTE=$'\033[38;2;102;124;151m'    # comments and hints
+    H_LABEL=$'\033[1;38;2;201;178;124m' # labels
+    ;;
+  *)
+    H_KW=$'\033[1;34m' H_CMD=$'\033[36m' H_OPT=$'\033[3;37m' H_PARAM=$'\033[32m'
+    H_PATH=$'\033[36m' H_NOTE=$'\033[90m' H_LABEL=$'\033[1;33m'
+    ;;
+  esac
+}
+
+# Color a command line the way a shell highlights it
+help_highlight() {
+  local -a words
+  local word bare color out=""
+  read -ra words <<<"$1"
+  for word in "${words[@]}"; do
+    bare="${word//[\[\]<>]/}"
+    case "$bare" in
+    uptools) color="$H_CMD" ;;
+    update | target | skip | show | completion) color="$H_KW" ;;
+    -*) color="$H_OPT" ;;
+    *) color="$H_PARAM" ;;
+    esac
+    out+="${color}${word}${H_RESET} "
+  done
+  printf '%s' "${out% }"
+}
+
+help_heading() {
+  printf '\n%s%s%s' "$H_KW" "$1" "$H_RESET"
+  [[ -n "${2:-}" ]] && printf '  %s%s%s' "$H_NOTE" "$2" "$H_RESET"
+  printf '\n'
+}
+
+# help_command <keyword> <arguments> <description, lines separated by \n>
+help_command() {
+  local line first=true
+  while IFS= read -r line; do
+    if [[ "$first" == true ]]; then
+      local width=${#1}
+      printf '  %s%s%s' "$H_KW" "$1" "$H_RESET"
+      if [[ -n "$2" ]]; then
+        printf ' %s%s%s' "$H_PARAM" "$2" "$H_RESET"
+        width=$((width + 1 + ${#2}))
+      fi
+      printf '%*s%s\n' $((26 - width)) "" "$line"
+      first=false
+    else
+      printf '  %26s%s\n' "" "$line"
+    fi
+  done <<<"$3"
+}
+
+# help_example <command line> <description>
+help_example() {
+  printf '  %s%*s %s%s%s\n' "$(help_highlight "$1")" $((35 - ${#1})) "" "$H_NOTE" "$2" "$H_RESET"
+}
+
+print_help() {
+  help_colors
+  local name alias_name
+
+  printf '%sUsage:%s %s\n' "$H_LABEL" "$H_RESET" \
+    "$(help_highlight 'uptools [update [names]] [target <names>] [skip <names>] [show] [completion zsh|fish|bash] [-h]')"
+  cat <<'HELPSTATIC'
+
+Check for and optionally upgrade developer tools on macOS.
+
+By default, runs the tools listed in the config file. Tools that are not listed
+there are not run; name them explicitly with target or update.
+HELPSTATIC
+
+  help_heading "Commands" "combine freely; names are comma or space separated"
+  help_command update "[names]" $'Install available updates (default: check only);\nnames are targets: update brew == target brew update'
+  help_command target "<names>" "Run exactly these tools instead of the config"
+  help_command skip "<names>" "Exclude tools for this run"
+  help_command show "" "List known tools: in config? installed?"
+  help_command completion "zsh|fish|bash" "Print shell completion script"
+
+  help_heading "Options"
+  printf '  %s%-26s%s%s\n' "$H_OPT" "-h, --help" "$H_RESET" "Show this help and exit"
+
+  help_heading "Available tools"
+  for name in "${ALL_TOOLS[@]}"; do
+    printf '  %s%-16s%s%s\n' "$H_PARAM" "$name" "$H_RESET" "${TOOL_DESC[$name]}"
+  done
+  for alias_name in $(printf '%s\n' "${!TOOL_ALIAS_DESC[@]}" | sort); do
+    printf '  %s%-16s%s%s\n' "$H_PARAM" "$alias_name" "$H_RESET" "${TOOL_ALIAS_DESC[$alias_name]}"
+  done
+
+  help_heading "Config file"
+  printf '  %s%s%s\n' "$H_PATH" "$CONFIG_FILE" "$H_RESET"
+  printf '  The tools to run by default, one per line. A tool that is not listed is not run.\n'
+  printf '  Lines starting with %s#%s are comments.\n\n' "$H_NOTE" "$H_RESET"
+  printf '    %shomebrew%s\n    %smise%s\n    %s# rustup   <- known, but not run by default%s\n' \
+    "$H_PARAM" "$H_RESET" "$H_PARAM" "$H_RESET" "$H_NOTE" "$H_RESET"
+
+  help_heading "Examples"
+  help_example "uptools" "Check tools listed in config"
+  help_example "uptools update" "Upgrade tools listed in config"
+  help_example "uptools update brew mise" "Upgrade Homebrew and Mise only"
+  help_example "uptools target ghcup" "Check ghcup only"
+  help_example "uptools target brew,ghcup update" "Upgrade Homebrew and ghcup only"
+  help_example "uptools skip mise" "Check config tools except Mise"
+  help_example "uptools show" "List known tools"
+
+  help_heading "Install completions"
+  printf '  %s %s>|%s %s~/.local/share/zsh/site-functions/_uptools%s\n' \
+    "$(help_highlight 'uptools completion zsh')" "$H_NOTE" "$H_RESET" "$H_PATH" "$H_RESET"
+  printf '  %s %s>|%s %s~/.config/fish/completions/uptools.fish%s\n' \
+    "$(help_highlight 'uptools completion fish')" "$H_NOTE" "$H_RESET" "$H_PATH" "$H_RESET"
+  printf '  %ssource <(%s%s%s)%s   %s# in ~/.bashrc%s\n' \
+    "$H_KW" "$H_RESET" "$(help_highlight 'uptools completion bash')" "$H_KW" "$H_RESET" "$H_NOTE" "$H_RESET"
+}
+
+# Keywords switch the list that following bare words are collected into
+CURRENT_LIST=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  -h | --help | help)
+    print_help
+    exit 0
+    ;;
+  --complete-tools)
+    print_complete_tools
+    exit 0
+    ;;
+  completion)
+    shift
+    print_completion "${1:-}"
+    exit 0
+    ;;
+  update)
+    AUTO_UPDATE=true
+    CURRENT_LIST=update
+    ;;
+  target)
+    EXPLICIT_TOOLS=true
+    CURRENT_LIST=target
+    ;;
+  skip)
+    CURRENT_LIST=skip
+    ;;
+  show)
+    SHOW_REQUESTED=true
+    CURRENT_LIST=show
+    ;;
+  -*)
+    echo >&2 -e "${RED}[ ERROR ]${RESET} Unknown option: $1"
+    print_help
+    exit 2
+    ;;
+  *)
+    case "$CURRENT_LIST" in
+    target) add_names TOOLS_TO_RUN "$1" ;;
+    update)
+      # Names after update are targets: uptools update brew == uptools target brew update
+      EXPLICIT_TOOLS=true
+      add_names TOOLS_TO_RUN "$1"
+      ;;
+    skip) add_names SKIP_TOOLS "$1" ;;
+    show)
+      echo >&2 -e "${RED}[ ERROR ]${RESET} show takes no arguments: $1"
+      exit 2
+      ;;
+    *)
+      echo >&2 -e "${RED}[ ERROR ]${RESET} Unexpected argument: $1 (use: target <names> or update <names>)"
+      print_help
+      exit 2
+      ;;
+    esac
+    ;;
+  esac
+  shift
+done
+
+if [[ "$SHOW_REQUESTED" == true ]]; then
+  print_show
+  exit 0
+fi
+
+# An explicit selection that expanded to nothing must not fall back to the config
+if [[ "$EXPLICIT_TOOLS" == true && ${#TOOLS_TO_RUN[@]} -eq 0 ]]; then
+  echo >&2 -e "${YELLOW}[ WARN ]${RESET} No tools selected"
+  exit 0
+fi
+
+# Default: the tools listed in the config file, unless names were given explicitly
+if [[ ${#TOOLS_TO_RUN[@]} -eq 0 ]]; then
+  load_config
+fi
+
+# Apply skip (always, regardless of how the list was built)
+apply_skip
+
+# Deduplicate TOOLS_TO_RUN preserving order; resolve aliases so e.g. "brew"
+# and "homebrew" are treated as the same tool and don't run twice.
+if [[ ${#TOOLS_TO_RUN[@]} -gt 0 ]]; then
+  declare -A _seen
+  unique=()
+  for tool in "${TOOLS_TO_RUN[@]}"; do
+    _canonical="${TOOL_ALIASES[$tool]:-$tool}"
+    if [[ -z "${_seen[$_canonical]+set}" ]]; then
+      _seen[$_canonical]=1
+      unique+=("$tool")
+    fi
+  done
+  TOOLS_TO_RUN=("${unique[@]}")
+  unset _seen unique _canonical
+fi
+
+# Validate all requested tool names upfront; filter out unknowns
+_valid=()
+for tool in "${TOOLS_TO_RUN[@]}"; do
+  validate_tool "$tool" && _valid+=("$tool")
+done
+TOOLS_TO_RUN=("${_valid[@]}")
+unset _valid
+
+for tool in "${TOOLS_TO_RUN[@]}"; do
+  run_tool "$tool"
+done
+
+exit $SCRIPT_EXIT_CODE

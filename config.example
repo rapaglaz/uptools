@@ -1,0 +1,16 @@
+# uptools configuration
+# The tools run by 'uptools' and 'uptools update' (one per line, # for comments).
+# A tool that is not listed here is not run; use 'uptools target <names>' for those.
+# Run 'uptools show' to see all known tools.
+
+homebrew
+mise
+
+# android
+# container
+# flutter
+# ghcup
+# haskell-tools
+# rust-tools
+# rustup
+# sdkman
