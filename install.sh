@@ -5,7 +5,8 @@ usage() {
   cat <<'USAGE'
 Usage: install.sh [--dry-run]
 
-Links ~/.local/bin/uptools to this checkout and creates config from config.example.
+Links ~/.local/bin/uptools to this checkout and creates config from examples/config.example
+in the config directory ($UPTOOLS_HOME, else ${XDG_CONFIG_HOME:-~/.config}/uptools).
 
   -n, --dry-run   Show what would be done without changing anything
   -h, --help      Show this help
@@ -40,6 +41,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${HOME}/.local/bin"
 TARGET="${BIN_DIR}/uptools"
+CONFIG_DIR="${UPTOOLS_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/uptools}"
+# Personal files that used to live next to the script (before the config directory existed)
+LEGACY_FILES=(config haskell-tools rust-tools)
 
 # Shorten $HOME to ~ for display
 tilde() {
@@ -52,6 +56,7 @@ plan_line() { printf '%s[dry-run]%s %s\n' "$YELLOW" "$RESET" "$1"; }
 
 D_SCRIPT="$(tilde "$SCRIPT_DIR")"
 D_TARGET="$(tilde "$TARGET")"
+D_CONFIG="$(tilde "$CONFIG_DIR")"
 
 heading "Installing uptools"
 if [[ "$DRY_RUN" == true ]]; then
@@ -63,20 +68,34 @@ if [[ "$DRY_RUN" == true ]]; then
   elif [[ -e "$TARGET" ]]; then
     plan_line "  warning: ${D_TARGET} exists and is not a symlink; it would be replaced"
   fi
-  if [[ -f "${SCRIPT_DIR}/config" ]]; then
-    plan_line "config exists, would keep: ${D_SCRIPT}/config"
+  [[ -d "$CONFIG_DIR" ]] || plan_line "would create directory: ${D_CONFIG}"
+  for name in "${LEGACY_FILES[@]}"; do
+    if [[ -f "${SCRIPT_DIR}/${name}" && ! -e "${CONFIG_DIR}/${name}" ]]; then
+      plan_line "would move: ${D_SCRIPT}/${name} -> ${D_CONFIG}/${name}"
+    fi
+  done
+  if [[ -f "${CONFIG_DIR}/config" || -f "${SCRIPT_DIR}/config" ]]; then
+    plan_line "config exists, would keep it"
   else
-    plan_line "would create: ${D_SCRIPT}/config (copy of config.example)"
+    plan_line "would create: ${D_CONFIG}/config (copy of examples/config.example)"
   fi
 else
   mkdir -p "$BIN_DIR"
   ln -sf "${SCRIPT_DIR}/uptools" "$TARGET"
   done_line "Linked ${D_TARGET} -> ${D_SCRIPT}/uptools"
 
-  # Start from the example config; it is git-ignored so local edits never conflict with updates
-  if [[ ! -f "${SCRIPT_DIR}/config" ]]; then
-    cp "${SCRIPT_DIR}/config.example" "${SCRIPT_DIR}/config"
-    done_line "Created ${D_SCRIPT}/config (edit it to choose the default tools)"
+  mkdir -p "$CONFIG_DIR"
+  for name in "${LEGACY_FILES[@]}"; do
+    if [[ -f "${SCRIPT_DIR}/${name}" && ! -e "${CONFIG_DIR}/${name}" ]]; then
+      mv "${SCRIPT_DIR}/${name}" "${CONFIG_DIR}/${name}"
+      done_line "Moved ${D_SCRIPT}/${name} -> ${D_CONFIG}/${name}"
+    fi
+  done
+
+  # Start from the example config; it lives outside the repository so updates never touch it
+  if [[ ! -f "${CONFIG_DIR}/config" ]]; then
+    cp "${SCRIPT_DIR}/examples/config.example" "${CONFIG_DIR}/config"
+    done_line "Created ${D_CONFIG}/config (edit it to choose the default tools)"
   fi
 fi
 
@@ -92,7 +111,7 @@ esac
 heading "Choosing what runs"
 printf '  %sconfig%s is an allow list: %suptools%s and %suptools update%s run only the tools listed\n' "$WHITE" "$RESET" "$CYAN" "$RESET" "$CYAN" "$RESET"
 printf '  there, one per line (%s#%s starts a comment).\n\n' "$DIM" "$RESET"
-row "Stop running a tool by default" "remove or comment it out in ${D_SCRIPT}/config"
+row "Stop running a tool by default" "remove or comment it out in ${D_CONFIG}/config"
 row "Still run it on demand" "uptools target <name>"
 row "Skip it for a single run" "uptools skip <name>"
 row "Remove a module for good" "delete its file in ${D_SCRIPT}/modules/"
@@ -101,11 +120,11 @@ heading "Tools that track a list"
 printf '  Some tools are installed through a package manager (cabal, cargo), so there is no\n'
 printf '  single program to update. %shaskell-tools%s and %srust-tools%s read the packages to keep\n' "$WHITE" "$RESET" "$WHITE" "$RESET"
 printf '  current from a plain text list, one name per line (%s#%s starts a comment):\n\n' "$DIM" "$RESET"
-row "haskell-tools  cabal, Hackage" "${D_SCRIPT}/haskell-tools"
-row "rust-tools     cargo, crates.io" "${D_SCRIPT}/rust-tools"
-printf '\n  Start from the examples. The lists are git-ignored, so your edits are never overwritten:\n\n'
-printf '    %scp %s/haskell-tools.example %s/haskell-tools%s\n' "$CYAN" "$D_SCRIPT" "$D_SCRIPT" "$RESET"
-printf '    %scp %s/rust-tools.example %s/rust-tools%s\n' "$CYAN" "$D_SCRIPT" "$D_SCRIPT" "$RESET"
+row "haskell-tools  cabal, Hackage" "${D_CONFIG}/haskell-tools"
+row "rust-tools     cargo, crates.io" "${D_CONFIG}/rust-tools"
+printf '\n  Start from the examples. The lists live outside the repository, so your edits are never overwritten:\n\n'
+printf '    %scp %s/examples/haskell-tools.example %s/haskell-tools%s\n' "$CYAN" "$D_SCRIPT" "$D_CONFIG" "$RESET"
+printf '    %scp %s/examples/rust-tools.example %s/rust-tools%s\n' "$CYAN" "$D_SCRIPT" "$D_CONFIG" "$RESET"
 printf '\n  Without a list the module is skipped. Add its name to config to run it by default.\n'
 
 heading "Adding your own module"

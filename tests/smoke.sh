@@ -23,6 +23,7 @@ CURRENT_TEST=""
 # new_sandbox: copy the scripts into a fresh directory and add the fake module
 new_sandbox() {
   SANDBOX="$(mktemp -d "$TMP_ROOT/sandbox.XXXXXX")"
+  export UPTOOLS_HOME="$SANDBOX" # config lives in the sandbox, never in the real ~/.config
   cp "$REPO_DIR/uptools" "$REPO_DIR/core.sh" "$SANDBOX/"
   mkdir "$SANDBOX/modules"
   CALL_LOG="$SANDBOX/calls.log"
@@ -279,6 +280,15 @@ assert_rc 0
 assert_contains "$ERR" "No config file"
 assert_calls ""
 
+test_case "config is read from XDG_CONFIG_HOME when UPTOOLS_HOME is unset"
+new_sandbox
+mkdir -p "$SANDBOX/xdg/uptools"
+printf 'fake\n' >"$SANDBOX/xdg/uptools/config"
+OUT="$(env -u UPTOOLS_HOME XDG_CONFIG_HOME="$SANDBOX/xdg" CALL_LOG="$CALL_LOG" "$BASH" "$SANDBOX/uptools" 2>"$SANDBOX/stderr")"
+RC=$?
+assert_rc 0
+assert_calls "fake mode=check name=fake"
+
 test_case "unknown tool in config exits 1"
 new_sandbox
 write_config nope fake
@@ -320,6 +330,7 @@ assert_contains "$ERR" "'show' is a reserved name"
 test_case "real modules all load without errors"
 SANDBOX="$TMP_ROOT/real"
 mkdir "$SANDBOX"
+export UPTOOLS_HOME="$SANDBOX"
 cp -R "$REPO_DIR/uptools" "$REPO_DIR/core.sh" "$REPO_DIR/modules" "$SANDBOX/"
 CALL_LOG="$SANDBOX/calls.log"
 : >"$CALL_LOG"

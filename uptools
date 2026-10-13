@@ -35,6 +35,9 @@ MODULES_DIR="${SCRIPT_DIR}/modules"
 # shellcheck source=core.sh
 source "${SCRIPT_DIR}/core.sh"
 
+# Personal state (config, tool lists) lives outside the repository. UPTOOLS_HOME overrides it.
+UPTOOLS_CONFIG_DIR="${UPTOOLS_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/uptools}"
+
 ALL_TOOLS=()
 declare -A TOOL_FUNC TOOL_ALIASES TOOL_DESC TOOL_ALIAS_DESC
 
@@ -93,7 +96,7 @@ TOOLS_TO_RUN=()
 SKIP_TOOLS=()
 SHOW_REQUESTED=false
 EXPLICIT_TOOLS=false # true when names were given via target / update <names>
-CONFIG_FILE="${SCRIPT_DIR}/config"
+CONFIG_FILE="${UPTOOLS_CONFIG_DIR}/config"
 
 # Load the tools to run by default from the config file (one per line, # for comments).
 # The config is an allow list: tools that are not listed are not run.

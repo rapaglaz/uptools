@@ -7,7 +7,7 @@ pre-commit:
       fail_text: Run `mise run fmt` and stage the result
     shellcheck:
       glob: "{uptools,*.sh}"
-      run: mise exec -- shellcheck {staged_files}
+      run: mise exec -- shellcheck -x {staged_files}
     actionlint:
       glob: ".github/workflows/*.{yml,yaml}"
       run: mise exec -- actionlint {staged_files}
