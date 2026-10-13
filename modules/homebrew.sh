@@ -26,16 +26,25 @@ _homebrew_check() {
   echo -e "${BOLD_WHITE}Checking for outdated packages...${RESET}"
 
   local _tmp_formula _tmp_cask _ret_formula _ret_cask
-  _tmp_formula=$(mktemp) || { handle_error "HOMEBREW" "Failed to create temp file"; return 1; }
-  _tmp_cask=$(mktemp)    || { rm -f "$_tmp_formula"; handle_error "HOMEBREW" "Failed to create temp file"; return 1; }
+  _tmp_formula=$(mktemp) || {
+    handle_error "HOMEBREW" "Failed to create temp file"
+    return 1
+  }
+  _tmp_cask=$(mktemp) || {
+    rm -f "$_tmp_formula"
+    handle_error "HOMEBREW" "Failed to create temp file"
+    return 1
+  }
   trap 'rm -f "$_tmp_formula" "$_tmp_cask"; trap - RETURN' RETURN
 
   brew outdated --formula --quiet >"$_tmp_formula" 2>&1 &
   local _pid_formula=$!
   brew outdated --cask --greedy --quiet >"$_tmp_cask" 2>&1 &
   local _pid_cask=$!
-  wait "$_pid_formula"; _ret_formula=$?
-  wait "$_pid_cask";   _ret_cask=$?
+  wait "$_pid_formula"
+  _ret_formula=$?
+  wait "$_pid_cask"
+  _ret_cask=$?
 
   if ((_ret_formula != 0)); then
     handle_error "HOMEBREW" "Command failed: brew outdated --formula"
@@ -49,7 +58,7 @@ _homebrew_check() {
   local -a outdated_formula_arr outdated_cask_arr
   local -a auto_updating_arr=() regular_casks_arr=()
   mapfile -t outdated_formula_arr <"$_tmp_formula"
-  mapfile -t outdated_cask_arr   <"$_tmp_cask"
+  mapfile -t outdated_cask_arr <"$_tmp_cask"
   rm -f "$_tmp_formula" "$_tmp_cask"
 
   if [[ ${#outdated_cask_arr[@]} -gt 0 ]]; then
@@ -77,7 +86,7 @@ _homebrew_upgrade() {
   echo -e "${BOLD_WHITE}Upgrading all outdated Homebrew packages...${RESET}"
   brew upgrade
   local exit_code=$?
-  if (( exit_code != 0 )); then
+  if ((exit_code != 0)); then
     local still_outdated
     still_outdated=$(brew outdated --quiet 2>/dev/null)
     if [[ -n "$still_outdated" ]]; then

@@ -19,20 +19,20 @@ _android_latest() {
 _android_new_packages() {
   local packages installed available
   packages=$(_android_list_packages)
-  installed=$(awk '$1 == "installed" { print $2 }' <<< "$packages")
-  available=$(awk '$1 == "available" { print $2 }' <<< "$packages")
+  installed=$(awk '$1 == "installed" { print $2 }' <<<"$packages")
+  available=$(awk '$1 == "available" { print $2 }' <<<"$packages")
 
   local platform_re='^platforms/android-[0-9]+(\.[0-9]+)?$'
   local tools_re='^build-tools/[0-9]+\.[0-9]+\.[0-9]+$'
   local candidates=() latest
 
-  if grep -qE "$platform_re" <<< "$installed"; then
-    latest=$(grep -E "$platform_re" <<< "$available" | sort -V | tail -1)
+  if grep -qE "$platform_re" <<<"$installed"; then
+    latest=$(grep -E "$platform_re" <<<"$available" | sort -V | tail -1)
     [[ -n "$latest" ]] && candidates+=("$latest")
   fi
 
-  if grep -qE "$tools_re" <<< "$installed"; then
-    latest=$(grep -E "$tools_re" <<< "$available" | sort -V | tail -1)
+  if grep -qE "$tools_re" <<<"$installed"; then
+    latest=$(grep -E "$tools_re" <<<"$available" | sort -V | tail -1)
     [[ -n "$latest" ]] && candidates+=("$latest")
   fi
 
@@ -41,13 +41,13 @@ _android_new_packages() {
   while IFS= read -r image; do
     [[ -z "$image" ]] && continue
     variant="${image#system-images/*/}"
-    latest=$(grep -E "^system-images/android-[0-9]+(\.[0-9]+)?/${variant}$" <<< "$available" | sort -V | tail -1)
+    latest=$(grep -E "^system-images/android-[0-9]+(\.[0-9]+)?/${variant}$" <<<"$available" | sort -V | tail -1)
     [[ -n "$latest" ]] && candidates+=("$latest")
-  done < <(grep -E '^system-images/' <<< "$installed")
+  done < <(grep -E '^system-images/' <<<"$installed")
 
   local pkg
   for pkg in "${candidates[@]}"; do
-    grep -qxF "$pkg" <<< "$installed" || echo "$pkg"
+    grep -qxF "$pkg" <<<"$installed" || echo "$pkg"
   done | sort -u
 }
 
