@@ -44,7 +44,7 @@ register_tool "foo" "foo_update" "description shown in --help"
 No changes to `uptools` or `core.sh` are needed — modules are auto-loaded from `modules/`, and
 completions pick up new tools at runtime (no regeneration, see **Completions**).
 
-The names `update`, `target`, `skip`, `show` and `completion` are reserved; `register_tool`
+The names `check`, `update`, `up`, `target`, `show` and `completion` are reserved; `register_tool`
 rejects them as tool or alias names.
 
 Optionally define `foo_installed` (prefix = handler name without `_update`) when the tool is not
@@ -53,30 +53,32 @@ See `homebrew_installed`, `haskell_tools_installed`, `sdkman_installed`.
 
 ## CLI
 
-Keyword based, no short flags. Keywords combine in any order; `target`, `update` and `skip` collect
+Keyword based; the only flags are `-s/--skip` and `-h/--help`. Keywords combine in any order; `check`, `update`, `target` and `-s/--skip` collect
 the names that follow them (comma or space separated) until the next keyword.
 
 ```text
-uptools [update [names]] [target <names>] [skip <names>] [show] [-h|--help]
+uptools [check [names]] [update|up [names]] [target <names>] [-s|--skip <names>] [show] [-h|--help]
 uptools completion zsh|fish|bash
 ```
 
 | Command | Meaning |
 | --- | --- |
-| `update [names]` | upgrade instead of check (`mode="update"` in handlers); names after it are targets, so `update brew` = `target brew update` |
+| `check [names]` | check without installing (`mode="check"` in handlers); names after it are targets, so `check brew` = `target brew` |
+| `update [names]`, `up [names]` | upgrade instead of check (`mode="update"` in handlers); names after it are targets, so `update brew` = `target brew update` |
 | `target <names>` | run exactly these tools instead of the config |
-| `skip <names>` | exclude tools for this run |
+| `-s <names>`, `--skip <names>` | exclude tools for this run |
 | `show` | list all known tools with `config` / `installed` state (no arguments) |
 | `completion zsh\|fish\|bash` | print the completion script |
 
-Bare words without `target`/`update`/`skip` before them are an error. Removed: the flags `-t`,
-`--tool`, `--only`, `-u`, `--update`, `--all`, `--skip`, `-s`, `--show`, `--no-color`,
+Bare `uptools` (or `--skip` alone) runs nothing and prints the help: a run needs `check`, `update`/`up` or `target`.
+Bare words without `check`/`update`/`up`/`target`/`-s`/`--skip` before them are an error. Removed: the flags `-t`,
+`--tool`, `--only`, `-u`, `--update`, `--all`, `--show`, `--no-color`,
 `--completion`, and the groups `default`, `optional`, `all`, `disabled` (plus the `disabled` file).
 
 ### Config
 
-`config` is an allow list: bare `uptools` / `uptools update` run only the tools listed there.
-Everything else needs an explicit `target`/`update <names>`. A missing config prints a hint and
+`config` is an allow list: `uptools check` / `uptools update` run only the tools listed there.
+Everything else needs an explicit `target`/`check`/`update <names>`. A missing config prints a hint and
 runs nothing (no fallback to all tools). An explicit selection that expands to nothing prints
 `No tools selected` and exits; it must not fall back to `config`.
 
@@ -143,7 +145,8 @@ trap "rm -rf '$tmpdir'" RETURN
 ## Completions
 
 Tool names are resolved at completion time by the hidden `uptools --complete-tools`
-(tab-separated `name<TAB>description`, tools and aliases). The generated scripts only contain the
+(tab-separated `name<TAB>description`; only the tools listed in `config` plus their aliases, nothing without a
+`config`). The generated scripts only contain the
 CLI grammar (keywords, flags), so:
 
 - Adding or renaming a module, or changing aliases/descriptions, needs **no** regeneration.

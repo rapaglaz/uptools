@@ -109,11 +109,11 @@ esac
   printf '\n%s(run "uptools show" once your shell finds the command)%s\n' "$DIM" "$RESET"
 
 heading "Choosing what runs"
-printf '  %sconfig%s is an allow list: %suptools%s and %suptools update%s run only the tools listed\n' "$WHITE" "$RESET" "$CYAN" "$RESET" "$CYAN" "$RESET"
+printf '  %sconfig%s is an allow list: %suptools check%s and %suptools update%s run only the tools listed\n' "$WHITE" "$RESET" "$CYAN" "$RESET" "$CYAN" "$RESET"
 printf '  there, one per line (%s#%s starts a comment).\n\n' "$DIM" "$RESET"
 row "Stop running a tool by default" "remove or comment it out in ${D_CONFIG}/config"
 row "Still run it on demand" "uptools target <name>"
-row "Skip it for a single run" "uptools skip <name>"
+row "Skip it for a single run" "uptools check --skip <name>"
 row "Remove a module for good" "delete its file in ${D_SCRIPT}/modules/"
 
 heading "Tools that track a list"
@@ -131,5 +131,5 @@ heading "Adding your own module"
 printf '  Create %s%s/modules/<name>.sh%s. It is loaded automatically and appears in\n' "$CYAN" "$D_SCRIPT" "$RESET"
 printf '  %suptools show%s and in tab completion. See "Adding a module" in README.md.\n' "$CYAN" "$RESET"
 
-printf '\n%sNext:%s %suptools show%s  %s·%s  %suptools%s  %s·%s  %suptools --help%s\n' \
+printf '\n%sNext:%s %suptools show%s  %s·%s  %suptools check%s  %s·%s  %suptools --help%s\n' \
   "$WHITE" "$RESET" "$CYAN" "$RESET" "$DIM" "$RESET" "$CYAN" "$RESET" "$DIM" "$RESET" "$CYAN" "$RESET"

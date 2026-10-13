@@ -96,13 +96,27 @@ new_sandbox
 run_uptools --help
 assert_not_contains "$OUT" $'\033'
 
-test_case "--complete-tools prints tab separated tools and aliases"
+test_case "--complete-tools prints the config tools and their aliases, tab separated"
 new_sandbox
+write_config fake
 run_uptools --complete-tools
 assert_rc 0
 assert_contains "$OUT" $'fake\tfake tool'
 assert_contains "$OUT" $'fk\tfake tool (alias for fake)'
 assert_contains "$OUT" $'fkd\tcustom alias text'
+assert_not_contains "$OUT" "other"
+
+test_case "--complete-tools resolves an alias listed in the config"
+new_sandbox
+write_config fk
+run_uptools --complete-tools
+assert_contains "$OUT" $'fake\tfake tool'
+
+test_case "--complete-tools prints nothing without a config"
+new_sandbox
+run_uptools --complete-tools
+assert_rc 0
+assert_not_contains "$OUT" "fake"
 
 for shell in zsh fish bash; do
   test_case "completion $shell prints a script"
@@ -166,6 +180,18 @@ run_uptools update fake
 assert_rc 0
 assert_calls "fake mode=update name=fake"
 
+test_case "check <names> runs the tool in check mode"
+new_sandbox
+run_uptools check fake
+assert_rc 0
+assert_calls "fake mode=check name=fake"
+
+test_case "up <names> is the same as update <names>"
+new_sandbox
+run_uptools up fake
+assert_rc 0
+assert_calls "fake mode=update name=fake"
+
 test_case "target <names> update is the same as update <names>"
 new_sandbox
 run_uptools target fake update
@@ -196,9 +222,9 @@ run_uptools target fk,fake
 assert_rc 0
 assert_calls "fake mode=check name=fk"
 
-test_case "skip removes tools, aliases included"
+test_case "--skip removes tools, aliases included"
 new_sandbox
-run_uptools target fake,other skip fk
+run_uptools target fake,other --skip fk
 assert_rc 0
 assert_calls "other mode=check name=other"
 
@@ -231,10 +257,38 @@ assert_calls ""
 
 # --- config ---
 
-test_case "bare uptools runs only the tools in config"
+test_case "bare uptools prints the help and runs nothing"
 new_sandbox
 write_config fake
 run_uptools
+assert_rc 0
+assert_contains "$OUT" "Usage:"
+assert_calls ""
+
+test_case "-s takes a comma separated list and stops at the next keyword"
+new_sandbox
+run_uptools -s fake,other check fk
+assert_rc 0
+assert_calls ""
+
+test_case "the skip word is no longer a keyword"
+new_sandbox
+run_uptools check skip other
+assert_rc 1
+assert_contains "$ERR" "Unknown tool: 'skip'"
+
+test_case "-s alone prints the help and runs nothing"
+new_sandbox
+write_config fake other
+run_uptools -s other
+assert_rc 0
+assert_contains "$OUT" "Usage:"
+assert_calls ""
+
+test_case "check runs only the tools in config"
+new_sandbox
+write_config fake
+run_uptools check
 assert_rc 0
 assert_calls "fake mode=check name=fake"
 
@@ -245,24 +299,31 @@ run_uptools update
 assert_rc 0
 assert_calls "fake mode=update name=fake"
 
+test_case "up without names runs config tools in update mode"
+new_sandbox
+write_config fake
+run_uptools up
+assert_rc 0
+assert_calls "fake mode=update name=fake"
+
 test_case "config ignores comments and blank lines"
 new_sandbox
 printf '# comment\n\n  other  \n# fake\n' >"$SANDBOX/config"
-run_uptools
+run_uptools check
 assert_rc 0
 assert_calls "other mode=check name=other"
 
 test_case "config accepts aliases"
 new_sandbox
 write_config fk
-run_uptools
+run_uptools check
 assert_rc 0
 assert_calls "fake mode=check name=fk"
 
-test_case "skip applies to the config"
+test_case "-s applies to the config"
 new_sandbox
 write_config fake other
-run_uptools skip other
+run_uptools check -s other
 assert_rc 0
 assert_calls "fake mode=check name=fake"
 
@@ -275,7 +336,7 @@ assert_calls "other mode=check name=other"
 
 test_case "missing config prints a hint and runs nothing"
 new_sandbox
-run_uptools
+run_uptools check
 assert_rc 0
 assert_contains "$ERR" "No config file"
 assert_calls ""
@@ -284,7 +345,7 @@ test_case "config is read from XDG_CONFIG_HOME when UPTOOLS_HOME is unset"
 new_sandbox
 mkdir -p "$SANDBOX/xdg/uptools"
 printf 'fake\n' >"$SANDBOX/xdg/uptools/config"
-OUT="$(env -u UPTOOLS_HOME XDG_CONFIG_HOME="$SANDBOX/xdg" CALL_LOG="$CALL_LOG" "$BASH" "$SANDBOX/uptools" 2>"$SANDBOX/stderr")"
+OUT="$(env -u UPTOOLS_HOME XDG_CONFIG_HOME="$SANDBOX/xdg" CALL_LOG="$CALL_LOG" "$BASH" "$SANDBOX/uptools" check 2>"$SANDBOX/stderr")"
 RC=$?
 assert_rc 0
 assert_calls "fake mode=check name=fake"
@@ -292,7 +353,7 @@ assert_calls "fake mode=check name=fake"
 test_case "unknown tool in config exits 1"
 new_sandbox
 write_config nope fake
-run_uptools
+run_uptools check
 assert_rc 1
 assert_contains "$ERR" "Unknown tool: 'nope'"
 assert_calls "fake mode=check name=fake"
@@ -311,7 +372,7 @@ assert_calls ""
 
 # --- registry ---
 
-for reserved in update target skip show completion; do
+for reserved in check update up target show completion; do
   test_case "register_tool rejects the reserved name '$reserved'"
   new_sandbox
   printf 'register_tool "%s" "fake_update" "reserved"\n' "$reserved" >"$SANDBOX/modules/reserved.sh"
@@ -334,6 +395,7 @@ export UPTOOLS_HOME="$SANDBOX"
 cp -R "$REPO_DIR/uptools" "$REPO_DIR/core.sh" "$REPO_DIR/modules" "$SANDBOX/"
 CALL_LOG="$SANDBOX/calls.log"
 : >"$CALL_LOG"
+for module_file in "$REPO_DIR"/modules/*.sh; do basename "$module_file" .sh; done >"$SANDBOX/config"
 run_uptools --complete-tools
 assert_rc 0
 assert_calls ""

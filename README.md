@@ -7,9 +7,10 @@ is outdated and, when asked, upgrades it. It is a plain Bash script: no build st
 tool means dropping one file into `modules/`.
 
 ```bash
-uptools                    # check the tools listed in your config
-uptools update             # upgrade them
+uptools check              # check the tools listed in your config
+uptools update             # upgrade them (short form: uptools up)
 uptools update brew mise   # upgrade only these tools
+uptools check brew         # check only these tools
 uptools target rustup      # check a tool that is not in your config
 uptools show               # list known tools: in config? installed?
 ```
@@ -50,28 +51,32 @@ runs by default or leave out unwanted tools, how the list-driven modules (`haske
 
 ## Usage
 
-Keywords can be combined in any order. `target`, `update` and `skip` collect the names that follow
-them (comma or space separated) until the next keyword.
+Keywords can be combined in any order. `check`, `update`, `target` and `-s`/`--skip` collect the names that
+follow them (comma or space separated) until the next keyword.
 
 | Command | Description |
 | --- | --- |
-| `update [names]` | Install available updates (default: check only). Names after it are targets: `update brew mise` = `target brew mise update` |
+| `check [names]` | Check for available updates without installing. Names after it are targets: `check brew` = `target brew` |
+| `update [names]`, `up [names]` | Install available updates. Names after it are targets: `update brew mise` = `target brew mise update` |
 | `target <names>` | Run exactly these tools instead of the config |
-| `skip <names>` | Exclude tools for this run |
 | `show` | List all known tools with their config and installed state |
 | `completion zsh\|fish\|bash` | Print the shell completion script |
+| `-s`, `--skip <names>` | Exclude tools for this run |
 | `-h`, `--help` | Show help |
 
 ```bash
 uptools target brew,mise update     # same as: uptools target brew mise update
 uptools update brew mise            # shorthand for the line above
 uptools update target brew          # order does not matter
-uptools skip mise                   # the config tools except mise
+uptools up brew                     # short form of update
+uptools check -s mise               # the config tools except mise
 ```
 
-Bare tool names are only accepted after `target`, `update` or `skip`. `target` without names
-prints `No tools selected` and exits; it never falls back to the config. The keywords `update`,
-`target`, `skip`, `show` and `completion` are reserved and cannot be used as tool names.
+`uptools` without a command (or with `--skip` alone) runs nothing and prints the help. Bare tool
+names are only accepted after `check`, `update`, `up`, `target` or `-s`/`--skip`. `target` without names
+prints `No tools selected` and exits; it never falls back to the config. The keywords `check`,
+`update`, `up`, `target`, `show` and `completion` are reserved and cannot be used as tool
+names.
 
 Colors are disabled when the `NO_COLOR` environment variable is set. The exit code is non-zero
 when any tool failed.
@@ -93,10 +98,10 @@ defines `<handler prefix>_installed` (for example `homebrew_installed` looks for
 ## Configuration
 
 `config` lives in `${XDG_CONFIG_HOME:-~/.config}/uptools/` (or in `$UPTOOLS_HOME` when set) and
-lists the tools that `uptools` and `uptools update` run, one per line; lines starting with `#` are
-comments. It is an **allow list**: a tool that is not listed is
-not run, so a newly added module never runs by accident. Use `target` or `update <names>` for
-anything else. Without a `config` file `uptools` prints a hint and runs nothing.
+lists the tools that `uptools check` and `uptools update` run, one per line; lines starting with
+`#` are comments. It is an **allow list**: a tool that is not listed is not run, so a newly added
+module never runs by accident. Use `target` or `check`/`update <names>` for anything else.
+Without a `config` file `uptools` prints a hint and runs nothing.
 
 ```text
 homebrew
@@ -145,6 +150,7 @@ ghcup itself; it never installs a different GHC, cabal, HLS or stack for you.
 
 Completion is available for **zsh**, **fish** and **bash**. Tool names are resolved when you press Tab (via
 the hidden `uptools --complete-tools`), so new modules show up without regenerating anything.
+Only the tools listed in your `config`, and their aliases, are offered; type any other name by hand.
 
 ```bash
 # zsh (the directory must be in your fpath)
