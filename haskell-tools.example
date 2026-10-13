@@ -1,5 +1,8 @@
-cabal-gild
-ghcid
-hlint
-hoogle
+# Haskell tools installed with cabal, one per line (# for comments).
+# uptools compares them with Hackage and reinstalls outdated ones in update mode.
+# Nothing is enabled by default: uncomment the tools you have installed.
 
+# cabal-gild
+# ghcid
+# hlint
+# hoogle

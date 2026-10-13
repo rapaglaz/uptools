@@ -101,7 +101,8 @@ mise
 # rustup   <- known, but not run by default
 ```
 
-`config` is git-ignored; `config.example` is the template that `install.sh` copies.
+`config` is git-ignored; `config.example` is the template that `install.sh` copies. Every tool in
+the template is commented out, so a fresh install runs nothing until you uncomment what you want.
 
 ## Available tools
 
