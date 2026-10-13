@@ -1,0 +1,66 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 10am on monday"],
+  "dependencyDashboardTitle": "Dependency Dashboard",
+  "dependencyDashboardLabels": ["dependencies"],
+  "labels": ["dependencies"],
+  "automergeType": "pr",
+  "automergeStrategy": "squash",
+  "prHourlyLimit": 3,
+  "internalChecksFilter": "strict",
+  "separateMajorMinor": true,
+  "minimumReleaseAge": "3 days",
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "groupName": null,
+    "minimumReleaseAge": "0 days",
+    "schedule": ["at any time"],
+    "vulnerabilityFixStrategy": "highest"
+  },
+  "packageRules": [
+    {
+      "description": "One weekly PR for all stable patch updates (automerged below)",
+      "matchCurrentVersion": "!/^0/",
+      "matchUpdateTypes": ["patch"],
+      "groupName": "patch dependencies"
+    },
+    {
+      "description": "One weekly PR for all digest and pin updates. No release timestamp to wait on, so skip minimumReleaseAge (it would block them under strict internal checks); never automerge. No matchCurrentVersion: floating tags like :latest have no usable version",
+      "matchUpdateTypes": ["digest", "pin"],
+      "groupName": "digest and pin updates",
+      "minimumReleaseAge": null,
+      "automerge": false
+    },
+    {
+      "description": "One weekly PR for all stable minor updates (merged manually)",
+      "matchCurrentVersion": "!/^0/",
+      "matchUpdateTypes": ["minor"],
+      "groupName": "minor dependencies"
+    },
+    {
+      "description": "Require approval for all major updates",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "labels": ["major-update"]
+    },
+    {
+      "description": "Automerge stable patch updates",
+      "matchCurrentVersion": "!/^0/",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "description": "Require approval for unstable 0.x updates (e.g. shellcheck)",
+      "matchCurrentVersion": "/^0/",
+      "matchUpdateTypes": ["minor", "patch"],
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "labels": ["unstable-version"]
+    }
+  ]
+}
