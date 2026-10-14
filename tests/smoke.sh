@@ -168,12 +168,6 @@ assert_contains "$ERR" "show takes no arguments"
 
 # --- dispatch ---
 
-test_case "target runs the tool in check mode"
-new_sandbox
-run_uptools target fake
-assert_rc 0
-assert_calls "fake mode=check name=fake"
-
 test_case "update <names> runs the tool in update mode"
 new_sandbox
 run_uptools update fake
@@ -192,65 +186,66 @@ run_uptools up fake
 assert_rc 0
 assert_calls "fake mode=update name=fake"
 
-test_case "target <names> update is the same as update <names>"
-new_sandbox
-run_uptools target fake update
-assert_rc 0
-assert_calls "fake mode=update name=fake"
-
 test_case "alias is passed to the handler as typed"
 new_sandbox
-run_uptools target fk
+run_uptools check fk
 assert_rc 0
 assert_calls "fake mode=check name=fk"
 
 test_case "comma and space separated lists are equivalent"
 new_sandbox
-run_uptools target fake,other
+run_uptools check fake,other
 assert_rc 0
 assert_calls $'fake mode=check name=fake\nother mode=check name=other'
 
 test_case "space separated names work too"
 new_sandbox
-run_uptools target other fake
+run_uptools check other fake
 assert_rc 0
 assert_calls $'other mode=check name=other\nfake mode=check name=fake'
 
 test_case "dedup keeps the first requested name"
 new_sandbox
-run_uptools target fk,fake
+run_uptools check fk,fake
 assert_rc 0
 assert_calls "fake mode=check name=fk"
 
 test_case "--skip removes tools, aliases included"
 new_sandbox
-run_uptools target fake,other --skip fk
+run_uptools check fake,other --skip fk
 assert_rc 0
 assert_calls "other mode=check name=other"
 
 test_case "unknown tool warns and exits 1"
 new_sandbox
-run_uptools target nope
+run_uptools check nope
 assert_rc 1
 assert_contains "$ERR" "Unknown tool: 'nope'"
 
 test_case "unknown tool does not stop the others"
 new_sandbox
-run_uptools target nope,fake
+run_uptools check nope,fake
 assert_rc 1
 assert_calls "fake mode=check name=fake"
 
 test_case "a failing handler makes the exit code 1"
 new_sandbox
-run_uptools target broken,fake
+run_uptools check broken,fake
 assert_rc 1
 assert_contains "$ERR" "BROKEN"
 assert_calls "fake mode=check name=fake"
 
-test_case "target without names runs nothing and does not fall back to config"
+test_case "target was removed and gives a clear error"
+new_sandbox
+run_uptools target fake
+assert_rc 2
+assert_contains "$ERR" "target was removed"
+assert_calls ""
+
+test_case "an empty name list runs nothing and does not fall back to config"
 new_sandbox
 write_config fake
-run_uptools target
+run_uptools check ""
 assert_rc 0
 assert_contains "$ERR" "No tools selected"
 assert_calls ""
@@ -327,10 +322,10 @@ run_uptools check -s other
 assert_rc 0
 assert_calls "fake mode=check name=fake"
 
-test_case "target ignores the config"
+test_case "check <names> ignores the config"
 new_sandbox
 write_config fake
-run_uptools target other
+run_uptools check other
 assert_rc 0
 assert_calls "other mode=check name=other"
 
