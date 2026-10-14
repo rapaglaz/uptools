@@ -112,7 +112,7 @@ heading "Choosing what runs"
 printf '  %sconfig%s is an allow list: %suptools check%s and %suptools update%s run only the tools listed\n' "$WHITE" "$RESET" "$CYAN" "$RESET" "$CYAN" "$RESET"
 printf '  there, one per line (%s#%s starts a comment).\n\n' "$DIM" "$RESET"
 row "Stop running a tool by default" "remove or comment it out in ${D_CONFIG}/config"
-row "Still run it on demand" "uptools target <name>"
+row "Still run it on demand" "uptools check <name>"
 row "Skip it for a single run" "uptools check --skip <name>"
 row "Remove a module for good" "delete its file in ${D_SCRIPT}/modules/"
 

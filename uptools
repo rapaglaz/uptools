@@ -42,6 +42,7 @@ ALL_TOOLS=()
 declare -A TOOL_FUNC TOOL_ALIASES TOOL_DESC TOOL_ALIAS_DESC
 
 # CLI keywords; a module may not register a tool or alias with one of these names
+# (target is no longer a keyword but stays reserved so the removed command gives a clear error)
 KEYWORDS=(check update up target show completion)
 # shellcheck disable=SC2329 # called from register_tool, which modules call
 is_reserved_name() {
@@ -92,11 +93,11 @@ fi
 
 # Argument parsing
 AUTO_UPDATE=false
-RUN_REQUESTED=false # true when check, update, up or target was given; otherwise only help is printed
+RUN_REQUESTED=false # true when check or update/up was given; otherwise only help is printed
 TOOLS_TO_RUN=()
 SKIP_TOOLS=()
 SHOW_REQUESTED=false
-EXPLICIT_TOOLS=false # true when names were given via target / check / update <names>
+EXPLICIT_TOOLS=false # true when names were given via check / update <names>
 CONFIG_FILE="${UPTOOLS_CONFIG_DIR}/config"
 
 # Load the tools to run by default from the config file (one per line, # for comments).
@@ -104,7 +105,7 @@ CONFIG_FILE="${UPTOOLS_CONFIG_DIR}/config"
 load_config() {
   if [[ ! -f "$CONFIG_FILE" ]]; then
     echo >&2 -e "${YELLOW}[ WARN ]${RESET} No config file at '$CONFIG_FILE'"
-    echo >&2 "List the tools to run there (one per line) or use: uptools target <names>"
+    echo >&2 "List the tools to run there (one per line) or use: uptools check <names>"
     return 0
   fi
   local line
@@ -254,7 +255,7 @@ _uptools_cmd() {
   for (( i = 2; i < CURRENT; i++ )); do
     w="${words[i]}"
     case "$w" in
-      check|update|up|target|show|completion) ctx="$w"; n=0 ;;
+      check|update|up|show|completion) ctx="$w"; n=0 ;;
       -s|--skip) ctx=skip; n=0 ;;
       -*) ;;
       *) (( n++ )) ;;
@@ -266,14 +267,13 @@ _uptools_cmd() {
   (( ${words[(I)check]} && ${words[(I)check]} < CURRENT )) || keywords+=('check:check for available updates')
   (( ${words[(I)update]} && ${words[(I)update]} < CURRENT )) || (( ${words[(I)up]} && ${words[(I)up]} < CURRENT )) || keywords+=('update:install available updates')
   (( ${words[(I)up]} && ${words[(I)up]} < CURRENT )) || (( ${words[(I)update]} && ${words[(I)update]} < CURRENT )) || keywords+=('up:short for update')
-  (( ${words[(I)target]} && ${words[(I)target]} < CURRENT )) || keywords+=('target:run specific tools')
   (( ${words[(I)show]} && ${words[(I)show]} < CURRENT )) || keywords+=('show:list known tools')
   (( ${words[(I)completion]} && ${words[(I)completion]} < CURRENT )) || keywords+=('completion:print shell completion script')
   (( ${words[(I)--skip]} && ${words[(I)--skip]} < CURRENT )) || (( ${words[(I)-s]} && ${words[(I)-s]} < CURRENT )) || options+=('--skip:exclude tools for this run')
   options+=('--help:show help and exit')
 
   case "$ctx" in
-    check|update|up|target|skip)
+    check|update|up|skip)
       if [[ "$PREFIX" == -* ]]; then
         _describe -t options 'option' options
         return
@@ -314,7 +314,7 @@ _uptools_complete() {
   for ((i = 1; i < COMP_CWORD; i++)); do
     w="${COMP_WORDS[i]}"
     case "$w" in
-    check | update | up | target | show | completion)
+    check | update | up | show | completion)
       ctx="$w"
       n=0
       kw_used+="$w "
@@ -337,13 +337,13 @@ _uptools_complete() {
   local keywords="" options="--help" k
   [[ "$kw_used" == *" update "* ]] && kw_used+="up "
   [[ "$kw_used" == *" up "* ]] && kw_used+="update "
-  for k in check update up target show completion; do
+  for k in check update up show completion; do
     [[ "$kw_used" == *" $k "* ]] || keywords+=" $k"
   done
   [[ "$kw_used" == *" skip "* ]] || options+=" --skip"
 
   case "$ctx" in
-  check | update | up | target | skip)
+  check | update | up | skip)
     if [[ "$cur" == -* ]]; then
       COMPREPLY=($(compgen -W "$options" -- "$cur"))
       return
@@ -384,7 +384,7 @@ function __uptools_ctx
     set -l n 0
     for tok in (commandline -opc)[2..-1]
         switch $tok
-            case check update up target show completion
+            case check update up show completion
                 set kw $tok
                 set n 0
             case -s --skip
@@ -405,7 +405,7 @@ function __uptools_want
         case shells
             test $ctx[1] = completion -a $ctx[2] -eq 0
         case tools
-            contains -- $ctx[1] check update up target skip
+            contains -- $ctx[1] check update up skip
         case options
             string match -q -- '-*' (commandline -ct); and not contains -- $ctx[1] show completion
         case keywords
@@ -426,7 +426,6 @@ function __uptools_keywords
     contains -- check $used; or printf 'check\tCheck for available updates\n'
     contains -- update $used; or contains -- up $used; or printf 'update\tInstall available updates\n'
     contains -- up $used; or contains -- update $used; or printf 'up\tShort for update\n'
-    contains -- target $used; or printf 'target\tRun specific tools\n'
     contains -- show $used; or printf 'show\tList known tools\n'
     contains -- completion $used; or printf 'completion\tPrint shell completion script\n'
 end
@@ -447,7 +446,7 @@ function __uptools_tools
     set -l used (string split , -- $cur)
     for tok in (commandline -opc)[2..-1]
         string match -q -- '-*' $tok
-        or contains -- $tok check update up target show completion
+        or contains -- $tok check update up show completion
         or set used $used (string split , -- $tok)
     end
     for line in (uptools --complete-tools 2>/dev/null)
@@ -513,7 +512,7 @@ help_highlight() {
     bare="${word//[\[\]<>]/}"
     case "$bare" in
     uptools) color="$H_CMD" ;;
-    check | update | up | target | show | completion) color="$H_KW" ;;
+    check | update | up | show | completion) color="$H_KW" ;;
     -*) color="$H_OPT" ;;
     *) color="$H_PARAM" ;;
     esac
@@ -557,7 +556,7 @@ print_help() {
   local name alias_name
 
   printf '%sUsage:%s %s\n' "$H_LABEL" "$H_RESET" \
-    "$(help_highlight 'uptools [check [names]] [update|up [names]] [target <names>] [-s|--skip <names>] [show] [completion zsh|fish|bash] [-h]')"
+    "$(help_highlight 'uptools [check [names]] [update|up [names]] [-s|--skip <names>] [show] [completion zsh|fish|bash] [-h]')"
   cat <<'HELPSTATIC'
 
 Check for and optionally upgrade developer tools on macOS.
@@ -568,9 +567,8 @@ prints this help.
 HELPSTATIC
 
   help_heading "Commands" "combine freely; names are comma or space separated"
-  help_command check "[names]" $'Check for available updates without installing;\nnames are targets: check brew == target brew'
-  help_command "update, up" "[names]" $'Install available updates;\nnames are targets: update brew == target brew update'
-  help_command target "<names>" "Run exactly these tools instead of the config"
+  help_command check "[names]" $'Check for available updates without installing;\nnames run exactly these tools instead of the config'
+  help_command "update, up" "[names]" $'Install available updates;\nnames run exactly these tools instead of the config'
   help_command show "" "List known tools: in config? installed?"
   help_command completion "zsh|fish|bash" "Print shell completion script"
 
@@ -598,7 +596,7 @@ HELPSTATIC
   help_example "uptools up" "Upgrade tools listed in config (same as update)"
   help_example "uptools update brew mise" "Upgrade Homebrew and Mise only"
   help_example "uptools check ghcup" "Check ghcup only"
-  help_example "uptools target brew,ghcup update" "Upgrade Homebrew and ghcup only"
+  help_example "uptools update brew,ghcup" "Upgrade Homebrew and ghcup only"
   help_example "uptools check -s mise" "Check config tools except Mise"
   help_example "uptools show" "List known tools"
 
@@ -638,9 +636,8 @@ while [[ $# -gt 0 ]]; do
     CURRENT_LIST=update
     ;;
   target)
-    RUN_REQUESTED=true
-    EXPLICIT_TOOLS=true
-    CURRENT_LIST=target
+    echo >&2 -e "${RED}[ ERROR ]${RESET} target was removed: use check <names> or update <names>"
+    exit 2
     ;;
   -s | --skip)
     CURRENT_LIST=skip
@@ -656,9 +653,8 @@ while [[ $# -gt 0 ]]; do
     ;;
   *)
     case "$CURRENT_LIST" in
-    target) add_names TOOLS_TO_RUN "$1" ;;
     check | update)
-      # Names after check or update are targets: uptools update brew == uptools target brew update
+      # Names after check or update select exactly these tools instead of the config
       EXPLICIT_TOOLS=true
       add_names TOOLS_TO_RUN "$1"
       ;;
@@ -668,7 +664,7 @@ while [[ $# -gt 0 ]]; do
       exit 2
       ;;
     *)
-      echo >&2 -e "${RED}[ ERROR ]${RESET} Unexpected argument: $1 (use: check <names>, update <names> or target <names>)"
+      echo >&2 -e "${RED}[ ERROR ]${RESET} Unexpected argument: $1 (use: check <names> or update <names>)"
       print_help
       exit 2
       ;;

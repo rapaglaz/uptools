@@ -11,7 +11,7 @@ uptools check              # check the tools listed in your config
 uptools update             # upgrade them (short form: uptools up)
 uptools update brew mise   # upgrade only these tools
 uptools check brew         # check only these tools
-uptools target rustup      # check a tool that is not in your config
+uptools check rustup       # check a tool that is not in your config
 uptools show               # list known tools: in config? installed?
 ```
 
@@ -51,31 +51,30 @@ runs by default or leave out unwanted tools, how the list-driven modules (`haske
 
 ## Usage
 
-Keywords can be combined in any order. `check`, `update`, `target` and `-s`/`--skip` collect the names that
+Keywords can be combined in any order. `check`, `update` and `-s`/`--skip` collect the names that
 follow them (comma or space separated) until the next keyword.
 
 | Command | Description |
 | --- | --- |
-| `check [names]` | Check for available updates without installing. Names after it are targets: `check brew` = `target brew` |
-| `update [names]`, `up [names]` | Install available updates. Names after it are targets: `update brew mise` = `target brew mise update` |
-| `target <names>` | Run exactly these tools instead of the config |
+| `check [names]` | Check for available updates without installing. Names after it run exactly these tools instead of the config |
+| `update [names]`, `up [names]` | Install available updates. Names after it run exactly these tools instead of the config |
 | `show` | List all known tools with their config and installed state |
 | `completion zsh\|fish\|bash` | Print the shell completion script |
 | `-s`, `--skip <names>` | Exclude tools for this run |
 | `-h`, `--help` | Show help |
 
 ```bash
-uptools target brew,mise update     # same as: uptools target brew mise update
-uptools update brew mise            # shorthand for the line above
-uptools update target brew          # order does not matter
+uptools update brew,mise            # same as: uptools update brew mise
+uptools brew update                 # error: names need a keyword in front of them
+uptools update -s mise brew         # order of keywords does not matter
 uptools up brew                     # short form of update
 uptools check -s mise               # the config tools except mise
 ```
 
 `uptools` without a command (or with `--skip` alone) runs nothing and prints the help. Bare tool
-names are only accepted after `check`, `update`, `up`, `target` or `-s`/`--skip`. `target` without names
+names are only accepted after `check`, `update`, `up` or `-s`/`--skip`. An explicit selection that expands to nothing
 prints `No tools selected` and exits; it never falls back to the config. The keywords `check`,
-`update`, `up`, `target`, `show` and `completion` are reserved and cannot be used as tool
+`update`, `up`, `target` (removed, kept reserved), `show` and `completion` are reserved and cannot be used as tool
 names.
 
 Colors are disabled when the `NO_COLOR` environment variable is set. The exit code is non-zero
@@ -100,7 +99,7 @@ defines `<handler prefix>_installed` (for example `homebrew_installed` looks for
 `config` lives in `${XDG_CONFIG_HOME:-~/.config}/uptools/` (or in `$UPTOOLS_HOME` when set) and
 lists the tools that `uptools check` and `uptools update` run, one per line; lines starting with
 `#` are comments. It is an **allow list**: a tool that is not listed is not run, so a newly added
-module never runs by accident. Use `target` or `check`/`update <names>` for anything else.
+module never runs by accident. Use `check`/`update <names>` for anything else.
 Without a `config` file `uptools` prints a hint and runs nothing.
 
 ```text
